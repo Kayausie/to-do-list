@@ -8,7 +8,7 @@ const getEnvironmentConfig = (): AppConfig => {
         case 'production':
             return {
                 // to be changed later in production mode
-                apiUrl: 'https://flask-to-do-list-psi.vercel.app/',
+                apiUrl: 'https://flask-to-do-list-psi.vercel.app',
                 appName: 'My React App - Production',
             }
         default:
