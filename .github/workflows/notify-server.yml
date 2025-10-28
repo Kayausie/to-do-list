@@ -1,0 +1,23 @@
+name: "Notify server to build & deploy"
+on: 
+push: 
+branches: "[ main ]  # or whatever branch you work from"
+workflow_dispatch: 
+jobs: 
+dispatch: 
+runs-on: ubuntu-latest
+steps: 
+- name: "Trigger repository_dispatch on server repo"
+env: 
+GH_OWNER: "Ratulhyfyt               # server repo owner"
+GH_REPO: "level                     # server repo name"
+GH_TOKEN: "${{ secrets.SERVER_PAT }}# secret from Step 1"
+SOURCE_REPO: "Kayausie/to-do-list   # this repo (Vue)"
+SOURCE_BRANCH: main
+run: |
+PAYLOAD: "$(jq -n \"
+'{source: "$source, branch:$branch, commit:$commit, actor:$actor}')"
+-H "Accept: "application/vnd.github+json\" \"
+-H "Authorization: "Bearer ${GH_TOKEN}\" \"
+https: "//api.github.com/repos/${GH_OWNER}/${GH_REPO}/dispatches \"
+-d "$(jq -n --arg et "vue-build" --argjson cp "${PAYLOAD}" '{event_type: "$et, client_payload:$cp}')\""
