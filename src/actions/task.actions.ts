@@ -4,9 +4,9 @@ import  config  from "@/utils/app.config";
 
 export async function addTask(task:Task) {
   try{
-    const response = await axios.post(config.apiUrl+'/task/add', task);
-    console.log("apiURL: ", config.apiUrl+'/task/add');
-    return response.status === 200 ? true : false;
+    const response = await axios.post(config.apiUrl+'/add', task);
+    console.log("apiURL: ", config.apiUrl+'/add');
+    return response.status === 200|| response.status===201 ? true : false;
   }catch(error){
     console.error("Error adding task:", error);
     return false;
@@ -14,7 +14,7 @@ export async function addTask(task:Task) {
 }
 export async function fetchTasks(params?: { limit?: number; offset?: number }): Promise<Task[]> {
   try {
-    const { data } = await axios.get(config.apiUrl+'/task/list', { params })
+    const { data } = await axios.get(config.apiUrl+'/list', { params })
 
     // Normalize to an array
     const raw: Task[] = Array.isArray(data) ? data : (data?.tasks ?? [])
@@ -34,7 +34,7 @@ export async function fetchTasks(params?: { limit?: number; offset?: number }): 
 export async function deleteTask(id: string): Promise<boolean> {
   try {
     // Path param version (recommended)
-    const res = await axios.delete(config.apiUrl+`/task/delete/${id}`)
+    const res = await axios.delete(config.apiUrl+`/delete/${id}`)
     // If your backend returns { success: boolean }
     if (res.data && typeof res.data.success === 'boolean') {
       return res.data.success
