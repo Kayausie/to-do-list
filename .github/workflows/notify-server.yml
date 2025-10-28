@@ -42,5 +42,5 @@ jobs:
           ls -la dist | head -20
 
       # Add your actual deploy step below (Azure, etc.)
-      #thank you
+      #thank you jovita
       
