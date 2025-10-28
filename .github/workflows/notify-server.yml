@@ -1,23 +1,44 @@
-name: "Notify server to build & deploy"
-on: 
-push: 
-branches: "[ main ]  # or whatever branch you work from"
-workflow_dispatch: 
-jobs: 
-dispatch: 
-runs-on: ubuntu-latest
-steps: 
-- name: "Trigger repository_dispatch on server repo"
-env: 
-GH_OWNER: "Ratulhyfyt               # server repo owner"
-GH_REPO: "level                     # server repo name"
-GH_TOKEN: "${{ secrets.SERVER_PAT }}# secret from Step 1"
-SOURCE_REPO: "Kayausie/to-do-list   # this repo (Vue)"
-SOURCE_BRANCH: main
-run: |
-PAYLOAD: "$(jq -n \"
-'{source: "$source, branch:$branch, commit:$commit, actor:$actor}')"
--H "Accept: "application/vnd.github+json\" \"
--H "Authorization: "Bearer ${GH_TOKEN}\" \"
-https: "//api.github.com/repos/${GH_OWNER}/${GH_REPO}/dispatches \"
--d "$(jq -n --arg et "vue-build" --argjson cp "${PAYLOAD}" '{event_type: "$et, client_payload:$cp}')\""
+name: Build and Deploy Frontend (from Vue repo)
+
+on:
+  repository_dispatch:
+    types: [vue-build]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout server repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Vue app repo
+        uses: actions/checkout@v4
+        with:
+          repository: Kayausie/to-do-list
+          ref: main
+          path: webapp
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies and build Vue app
+        working-directory: webapp
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy built files into server project
+        run: |
+          rm -rf ./dist
+          mkdir -p ./dist
+          cp -R webapp/dist/* ./dist/
+
+      - name: Verify copied files
+        run: |
+          ls -la dist | head -20
+
+      # Add your actual deploy step below (Azure, etc.)
