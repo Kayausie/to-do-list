@@ -1,27 +1,29 @@
 name: Build and Deploy Frontend (from Vue repo)
 
 on:
-  workflow_dispatch: {}
-  # Optional: auto-run on push to main
+  workflow_dispatch: {}     # run manually from the Actions tab
+  # If you want auto-deploy on every push to main, uncomment:
   # push:
   #   branches: [main]
 
 permissions:
-  contents: write
+  contents: write            # needed to push to the server repo
 
 env:
-  SERVER_REPO: Ratulhyfyt/level
-  SERVER_BRANCH: main
-  TARGET_DIR: public     # <-- change if your server serves from a different folder
+  SERVER_REPO: Ratulhyfyt/level   # <-- production repo
+  SERVER_BRANCH: main             # <-- branch to push to
+  TARGET_DIR: public              # <-- folder in server repo that serves static files
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Checkout Vue repo (this repo)
+      # 1) Checkout Vue app (this repo)
       - name: Checkout Vue app repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       # 2) Build Vue
       - name: Setup Node
@@ -35,30 +37,31 @@ jobs:
           npm ci
           npm run build
 
-      # 3) Checkout Level (server) repo
+      # 3) Checkout the production/server repo into ./server
       - name: Checkout server repo
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SERVER_REPO }}
           ref: ${{ env.SERVER_BRANCH }}
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GH_PAT }}      # PAT with "repo" scope (add as a secret in this repo)
           path: server
+          fetch-depth: 1
 
-      # 4) Copy build into server repo
+      # 4) Copy built files into the server repo's static folder
       - name: Copy frontend build into server repo
         run: |
           mkdir -p server/${{ env.TARGET_DIR }}
           rm -rf server/${{ env.TARGET_DIR }}/*
           cp -r dist/* server/${{ env.TARGET_DIR }}/
-          # ensure at least one changed file so a commit is created
-          echo "run $GITHUB_RUN_ID at $(date -u)" > server/${{ env.TARGET_DIR }}/.deploy-trigger.txt
+          # ensure a change so a commit is created even if contents identical
+          echo "deployed run $GITHUB_RUN_ID at $(date -u)" > server/${{ env.TARGET_DIR }}/.deploy-trigger.txt
 
-      # 5) Commit & push to Level -> triggers its workflows
+      # 5) Commit & push -> triggers Level repo workflows (e.g., Azure deploy)
       - name: Commit & push changes
         run: |
           cd server
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Frontend build from to-do-list $GITHUB_SHA"
+          git commit -m "Frontend build from to-do-list $GITHUB_SHA" || echo "No changes to commit"
           git push origin ${{ env.SERVER_BRANCH }}
