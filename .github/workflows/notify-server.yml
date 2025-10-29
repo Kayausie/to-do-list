@@ -1,25 +1,25 @@
 name: Build and Deploy Frontend (from Vue repo)
 
 on:
-  workflow_dispatch: {}     # run manually from the Actions tab
-  # If you want auto-deploy on every push to main, uncomment:
+  workflow_dispatch: {}
+  # Optional: auto-run on push to main
   # push:
   #   branches: [main]
 
 permissions:
-  contents: write            # needed to push to the server repo
+  contents: write
 
 env:
-  SERVER_REPO: Ratulhyfyt/level   # <-- production repo
-  SERVER_BRANCH: main             # <-- branch to push to
-  TARGET_DIR: public              # <-- folder in server repo that serves static files
+  SERVER_REPO: Ratulhyfyt/level
+  SERVER_BRANCH: main
+  TARGET_DIR: public            # change if your server serves from another folder
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Checkout Vue app (this repo)
+      # 1) Checkout Vue app
       - name: Checkout Vue app repo
         uses: actions/checkout@v4
         with:
@@ -36,32 +36,42 @@ jobs:
         run: |
           npm ci
           npm run build
+          echo "---- dist contents ----"
+          ls -la dist | head -50
 
-      # 3) Checkout the production/server repo into ./server
+      # 3) Checkout the production/server repo
       - name: Checkout server repo
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SERVER_REPO }}
           ref: ${{ env.SERVER_BRANCH }}
-          token: ${{ secrets.GH_PAT }}      # PAT with "repo" scope (add as a secret in this repo)
+          token: ${{ secrets.GH_PAT }}   # PAT with repo write access
           path: server
           fetch-depth: 1
 
-      # 4) Copy built files into the server repo's static folder
+      # 4) Copy build into server repo and show what changed
       - name: Copy frontend build into server repo
         run: |
           mkdir -p server/${{ env.TARGET_DIR }}
           rm -rf server/${{ env.TARGET_DIR }}/*
           cp -r dist/* server/${{ env.TARGET_DIR }}/
-          # ensure a change so a commit is created even if contents identical
+          # ensure a change exists even if build is identical
           echo "deployed run $GITHUB_RUN_ID at $(date -u)" > server/${{ env.TARGET_DIR }}/.deploy-trigger.txt
+          echo "---- server/${{ env.TARGET_DIR }} after copy ----"
+          ls -la server/${{ env.TARGET_DIR }} | head -80
 
-      # 5) Commit & push -> triggers Level repo workflows (e.g., Azure deploy)
+      # 5) Commit & push (force-add in case .gitignore ignores build assets)
       - name: Commit & push changes
         run: |
           cd server
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # show ignored files to diagnose .gitignore issues
+          echo "---- git status (including ignored) ----"
+          git status --ignored -s || true
+          # force add the target dir in case it's ignored by .gitignore
+          git add -f "${{ env.TARGET_DIR }}"
           git add -A
-          git commit -m "Frontend build from to-do-list $GITHUB_SHA" || echo "No changes to commit"
+          # if still nothing to commit, make an empty commit so we can verify push perms
+          git diff --cached --quiet && git commit --allow-empty -m "Trigger deploy (no changes) from to-do-list $GITHUB_SHA" || git commit -m "Frontend build from to-do-list $GITHUB_SHA"
           git push origin ${{ env.SERVER_BRANCH }}
