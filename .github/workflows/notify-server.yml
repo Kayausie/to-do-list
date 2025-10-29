@@ -1,46 +1,64 @@
 name: Build and Deploy Frontend (from Vue repo)
 
 on:
-  repository_dispatch:
-    types: [vue-build]
-  workflow_dispatch:
+  workflow_dispatch: {}
+  # Optional: auto-run on push to main
+  # push:
+  #   branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  SERVER_REPO: Ratulhyfyt/level
+  SERVER_BRANCH: main
+  TARGET_DIR: public     # <-- change if your server serves from a different folder
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout server repo
-        uses: actions/checkout@v4
-
+      # 1) Checkout Vue repo (this repo)
       - name: Checkout Vue app repo
         uses: actions/checkout@v4
-        with:
-          repository: Kayausie/to-do-list
-          ref: main
-          path: webapp
 
+      # 2) Build Vue
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: npm
 
-      - name: Install dependencies and build Vue app
-        working-directory: webapp
+      - name: Install & build
         run: |
           npm ci
           npm run build
 
-      - name: Copy built files into server project
-        run: |
-          rm -rf ./dist
-          mkdir -p ./dist
-          cp -R webapp/dist/* ./dist/
+      # 3) Checkout Level (server) repo
+      - name: Checkout server repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SERVER_REPO }}
+          ref: ${{ env.SERVER_BRANCH }}
+          token: ${{ secrets.GH_PAT }}
+          path: server
 
-      - name: Verify copied files
+      # 4) Copy build into server repo
+      - name: Copy frontend build into server repo
         run: |
-          ls -la dist | head -20
+          mkdir -p server/${{ env.TARGET_DIR }}
+          rm -rf server/${{ env.TARGET_DIR }}/*
+          cp -r dist/* server/${{ env.TARGET_DIR }}/
+          # ensure at least one changed file so a commit is created
+          echo "run $GITHUB_RUN_ID at $(date -u)" > server/${{ env.TARGET_DIR }}/.deploy-trigger.txt
 
-      # Add your actual deploy step below (Azure, etc.)
-      #thank you jovita
-      
+      # 5) Commit & push to Level -> triggers its workflows
+      - name: Commit & push changes
+        run: |
+          cd server
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Frontend build from to-do-list $GITHUB_SHA"
+          git push origin ${{ env.SERVER_BRANCH }}
